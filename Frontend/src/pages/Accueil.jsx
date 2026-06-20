@@ -2,10 +2,17 @@ import { useState } from 'react';
 import MapComponent from '../components/maps/MapComponent';
 import Legend from '../components/common/Legend';
 import ChatAssistant from '../components/common/ChatAssistant';
+import ItineraryPopup from '../components/Itinerary/ItineraryPopup';
 
 export default function Accueil() {
   const [activeMenu, setActiveMenu] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [showItinerary, setShowItinerary] = useState(false);
+
+  const handleItineraryCalculate = (data) => {
+    console.log('Itinéraire calculé:', data);
+    // Ici on peut tracer la route sur la carte
+  };
 
   return (
     <div className="w-full h-full relative">
@@ -19,44 +26,53 @@ export default function Accueil() {
         <Legend />
       </div>
 
-      {/* Menu des actions latérales */}
-      <div className="absolute top-20 md:top-24 right-4 md:right-8 z-[1000] flex flex-col gap-2 md:gap-3">
-        <button
-          onClick={() => setActiveMenu(activeMenu === 'signaler' ? null : 'signaler')}
-          className={`w-36 md:w-44 bg-red-500/90 hover:bg-red-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-red-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
-            activeMenu === 'signaler' ? 'ring-2 ring-red-400/50 ring-offset-2 ring-offset-black' : ''
-          }`}
-        >
-          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          Signaler
-        </button>
+      {/* Menu des actions latérales - les 3 boutons disparaissent quand le popup est ouvert */}
+      {!showItinerary && (
+        <div className="absolute top-20 md:top-24 right-4 md:right-8 z-[1000] flex flex-col gap-2 md:gap-3">
+          <button
+            onClick={() => setActiveMenu(activeMenu === 'signaler' ? null : 'signaler')}
+            className={`w-36 md:w-44 bg-red-500/90 hover:bg-red-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-red-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
+              activeMenu === 'signaler' ? 'ring-2 ring-red-400/50 ring-offset-2 ring-offset-black' : ''
+            }`}
+          >
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Signaler
+          </button>
 
-        <button
-          onClick={() => setActiveMenu(activeMenu === 'itineraire' ? null : 'itineraire')}
-          className={`w-36 md:w-44 bg-blue-500/90 hover:bg-blue-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-blue-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
-            activeMenu === 'itineraire' ? 'ring-2 ring-blue-400/50 ring-offset-2 ring-offset-black' : ''
-          }`}
-        >
-          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
-          Itinéraire
-        </button>
+          <button
+            onClick={() => setShowItinerary(true)}
+            className={`w-36 md:w-44 bg-blue-500/90 hover:bg-blue-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-blue-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
+              activeMenu === 'itineraire' ? 'ring-2 ring-blue-400/50 ring-offset-2 ring-offset-black' : ''
+            }`}
+          >
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            Itinéraire
+          </button>
 
-        <button
-          onClick={() => setActiveMenu(activeMenu === 'prediction' ? null : 'prediction')}
-          className={`w-36 md:w-44 bg-orange-500/90 hover:bg-orange-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-orange-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
-            activeMenu === 'prediction' ? 'ring-2 ring-orange-400/50 ring-offset-2 ring-offset-black' : ''
-          }`}
-        >
-          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h2a2 2 0 002-2zm12 0v-3a2 2 0 00-2-2h-2a2 2 0 00-2 2v3a2 2 0 002 2h2a2 2 0 002-2z" />
-          </svg>
-          Prédiction
-        </button>
-      </div>
+          <button
+            onClick={() => setActiveMenu(activeMenu === 'prediction' ? null : 'prediction')}
+            className={`w-36 md:w-44 bg-orange-500/90 hover:bg-orange-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-orange-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
+              activeMenu === 'prediction' ? 'ring-2 ring-orange-400/50 ring-offset-2 ring-offset-black' : ''
+            }`}
+          >
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h2a2 2 0 002-2zm12 0v-3a2 2 0 00-2-2h-2a2 2 0 00-2 2v3a2 2 0 002 2h2a2 2 0 002-2z" />
+            </svg>
+            Prédiction
+          </button>
+        </div>
+      )}
+
+      {/* Popup Itinéraire */}
+      <ItineraryPopup
+        isOpen={showItinerary}
+        onClose={() => setShowItinerary(false)}
+        onCalculate={handleItineraryCalculate}
+      />
 
       {/* Bouton de recherche flottant */}
       <div className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-[1000]">
