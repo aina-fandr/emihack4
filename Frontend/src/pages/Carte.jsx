@@ -18,6 +18,7 @@ import {
 import MapComponent from '../components/maps/MapComponent';
 import Legend from '../components/common/Legend';
 import { trafficService, mapService } from '../services/api';
+import ChatAssistant from '../components/common/ChatAssistant';
 
 export default function Carte() {
   const [loading, setLoading] = useState(true);
@@ -192,6 +193,8 @@ export default function Carte() {
   }
 
   return (
+
+   
     <div className="h-full w-full relative bg-slate-900">
       
       {/* Carte */}
@@ -349,6 +352,7 @@ export default function Carte() {
           </div>
         </div>
       </div>
+      <ChatAssistant />
 
       {/* ============ LÉGENDE ============ */}
       <div className="absolute bottom-8 left-6 z-20">

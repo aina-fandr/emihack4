@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import MapComponent from '../components/maps/MapComponent';
 import Legend from '../components/common/Legend';
+import ChatAssistant from '../components/common/ChatAssistant';
 
 export default function Accueil() {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -13,12 +14,12 @@ export default function Accueil() {
         <MapComponent />
       </div>
 
-      {/* Légende - responsive */}
+      {/* Légende */}
       <div className="absolute bottom-4 md:bottom-8 left-4 md:left-8 z-[1000]">
         <Legend />
       </div>
 
-      {/* Menu des actions latérales - responsive */}
+      {/* Menu des actions latérales */}
       <div className="absolute top-20 md:top-24 right-4 md:right-8 z-[1000] flex flex-col gap-2 md:gap-3">
         <button
           onClick={() => setActiveMenu(activeMenu === 'signaler' ? null : 'signaler')}
@@ -57,7 +58,7 @@ export default function Accueil() {
         </button>
       </div>
 
-      {/* Bouton de recherche flottant - responsive */}
+      {/* Bouton de recherche flottant */}
       <div className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-[1000]">
         <div className="transition-all duration-300">
           {!searchOpen ? (
@@ -92,6 +93,9 @@ export default function Accueil() {
           )}
         </div>
       </div>
+
+      {/* Assistant IA */}
+      <ChatAssistant />
     </div>
   );
 }
