@@ -122,8 +122,7 @@ export default function ChatAssistant() {
                 onClick={clearChat}
                 className="text-white hover:text-blue-200 transition text-xs"
                 title="Effacer l'historique"
-              >
-                🗑️
+              > 
               </button>
               <button
                 onClick={() => setIsMinimized(!isMinimized)}
@@ -142,7 +141,7 @@ export default function ChatAssistant() {
 
           {!isMinimized && (
             <>
-              {/* Messages */}
+              {/* Messages - TEXTE EN NOIR */}
               <div className="flex-1 p-4 overflow-y-auto h-[380px] bg-slate-50">
                 {messages.map((message) => (
                   <div
@@ -160,7 +159,7 @@ export default function ChatAssistant() {
                       className={`max-w-[80%] p-3 rounded-2xl text-sm ${
                         message.type === 'user'
                           ? 'bg-blue-500 text-white rounded-tr-none'
-                          : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'
+                          : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                       }`}
                     >
                       <div className="whitespace-pre-wrap">{message.content}</div>
@@ -205,7 +204,7 @@ export default function ChatAssistant() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Posez votre question..."
-                    className="flex-1 px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="flex-1 px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-800"
                   />
                   <button
                     onClick={handleSend}
