@@ -205,7 +205,7 @@ export default function Carte() {
       {/* Overlay */}
       <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-black/70 to-transparent z-10 pointer-events-none" />
 
-      {/* ============ RECHERCHE + EN DIRECT + STATISTIQUES (EN DESSOUS DE LA NAVBAR) ============ */}
+      {/* ============ RECHERCHE + EN DIRECT + STATISTIQUES ============ */}
       <div className="absolute top-20 right-6 z-20 flex flex-col items-end gap-2 max-w-sm">
         
         {/* Barre de recherche */}
@@ -227,9 +227,9 @@ export default function Carte() {
                 onChange={(e) => setSelectedRegion(e.target.value)}
                 className="bg-slate-100 text-slate-700 text-[10px] rounded-xl px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 border-0 max-w-[80px]"
               >
-                <option value="all">🌍 Régions</option>
+                <option value="all">🌍</option>
                 {regions.map((region) => (
-                  <option key={region} value={region}>{region}</option>
+                  <option key={region} value={region}>{region.slice(0, 6)}</option>
                 ))}
               </select>
 
@@ -297,7 +297,7 @@ export default function Carte() {
         </div>
       </div>
 
-      {/* ============ LISTE DES AXES (AVEC UNE SEULE BARRE DE SCROLL) ============ */}
+      {/* ============ LISTE DES AXES ============ */}
       <div className="absolute bottom-[calc(16rem+1cm)] left-6 z-20 w-72">
         <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/50 p-2.5 max-h-48 overflow-y-auto custom-scrollbar">
           <div className="flex items-center justify-between mb-2 sticky top-0 bg-white/95 z-10 pb-1.5 border-b border-slate-200/50">
@@ -350,54 +350,9 @@ export default function Carte() {
         </div>
       </div>
 
-      {/* ============ LÉGENDE (EN BAS À GAUCHE) ============ */}
+      {/* ============ LÉGENDE ============ */}
       <div className="absolute bottom-8 left-6 z-20">
         <Legend />
-      </div>
-
-      {/* ============ CONTRÔLES DE LA CARTE ============ */}
-      <div className="absolute bottom-8 right-6 z-20 flex flex-col gap-1.5">
-        <button
-          onClick={() => document.querySelector('.leaflet-control-zoom-in')?.click()}
-          className="bg-white/95 hover:bg-white p-2.5 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Zoom avant"
-        >
-          <ZoomIn className="w-4 h-4 text-slate-700" />
-        </button>
-        <button
-          onClick={() => document.querySelector('.leaflet-control-zoom-out')?.click()}
-          className="bg-white/95 hover:bg-white p-2.5 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Zoom arrière"
-        >
-          <ZoomOut className="w-4 h-4 text-slate-700" />
-        </button>
-        <button
-          onClick={() => {
-            const map = document.querySelector('.leaflet-container')?._leaflet_map;
-            if (map) map.setView([-18.9137, 47.5361], 13);
-          }}
-          className="bg-white/95 hover:bg-white p-2.5 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Réinitialiser"
-        >
-          <RefreshCw className="w-4 h-4 text-slate-700" />
-        </button>
-        <button
-          onClick={() => {
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(
-                (position) => {
-                  const map = document.querySelector('.leaflet-container')?._leaflet_map;
-                  if (map) map.setView([position.coords.latitude, position.coords.longitude], 16);
-                },
-                () => alert('Position non disponible')
-              );
-            }
-          }}
-          className="bg-white/95 hover:bg-white p-2.5 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Ma position"
-        >
-          <Crosshair className="w-4 h-4 text-blue-500" />
-        </button>
       </div>
 
       {/* ============ PIED DE PAGE ============ */}
