@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Route, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { X, Route, Eye, EyeOff, AlertTriangle, Loader2 } from 'lucide-react';
 import ItineraryHeader from './ItineraryHeader';
 import ItineraryForm from './ItineraryForm';
 import ItinerarySuggestions from './ItinerarySuggestions';
@@ -7,7 +7,23 @@ import ItineraryAlerts from './ItineraryAlerts';
 import ItineraryBestTime from './ItineraryBestTime';
 import ItinerarySummary from './ItinerarySummary';
 import ItineraryMap from './ItineraryMap';
-import { itineraryService } from '../../services/itinerary.api';
+import ItinerarySteps from './ItinerarySteps';
+import { 
+  getRouteAlerts,
+  getZoneCoordinates,
+  regionsData,
+  trafficData,
+  getAllBusStops,
+  generateSteps,
+  arretsFianarantsoa
+} from '../../data/madagascar.data';
+import { 
+  tanaBusLines, 
+  fianarBusLines,
+  getAllBusStopsFromLines,
+  estimateTravelTime,
+  getTravelTimeByMode
+} from '../../data/busData';
 
 export default function ItineraryPopup({ isOpen, onClose, onCalculate, userLocation }) {
   const [departure, setDeparture] = useState('Ma position actuelle');
@@ -17,12 +33,131 @@ export default function ItineraryPopup({ isOpen, onClose, onCalculate, userLocat
   const [result, setResult] = useState(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showMap, setShowMap] = useState(true);
+  const [showSteps, setShowSteps] = useState(true);
   const [currentPosition, setCurrentPosition] = useState(null);
+  const [departureCoords, setDepartureCoords] = useState(null);
   const [routePoints, setRoutePoints] = useState([]);
   const [avoidTraffic, setAvoidTraffic] = useState(false);
-  const [realTimeData, setRealTimeData] = useState(null);
+  const [availableDestinations, setAvailableDestinations] = useState([]);
+  const [busStopsList, setBusStopsList] = useState([]);
+  const [steps, setSteps] = useState([]);
+  const [optimizedTime, setOptimizedTime] = useState('');
+  const [destinationCoords, setDestinationCoords] = useState(null);
 
-  // Récupérer la position actuelle
+  // ============================================================
+  // 1. INITIALISATION DES DESTINATIONS
+  // ============================================================
+  useEffect(() => {
+    try {
+      const allZones = [];
+      for (const [region, data] of Object.entries(regionsData)) {
+        if (data?.zones) {
+          data.zones.forEach(zone => allZones.push(zone));
+        }
+      }
+
+      const legacyBusStops = getAllBusStops();
+      const legacyStopNames = legacyBusStops.map(stop => stop.name);
+
+      const tanaStops = [];
+      Object.values(tanaBusLines).forEach(line => {
+        if (line.arrets) {
+          line.arrets.forEach(arret => tanaStops.push(arret.nom));
+        }
+      });
+
+      const fianarStops = [];
+      Object.values(fianarBusLines).forEach(line => {
+        if (line.arrets) {
+          line.arrets.forEach(arret => fianarStops.push(arret.nom));
+        }
+      });
+
+      const fianarLegacyStops = arretsFianarantsoa.map(stop => stop.nom);
+
+      const allDestinationsSet = new Set([
+        ...allZones,
+        ...legacyStopNames,
+        ...tanaStops,
+        ...fianarStops,
+        ...fianarLegacyStops
+      ]);
+      
+      setAvailableDestinations(Array.from(allDestinationsSet));
+
+      const allBusStops = [];
+
+      Object.values(tanaBusLines).forEach(line => {
+        if (line.arrets) {
+          line.arrets.forEach(arret => {
+            allBusStops.push({
+              name: arret.nom,
+              region: 'Antananarivo',
+              lat: arret.lat,
+              lng: arret.lng,
+              ligne: line.nom,
+              couleur: line.couleur
+            });
+          });
+        }
+      });
+
+      Object.values(fianarBusLines).forEach(line => {
+        if (line.arrets) {
+          line.arrets.forEach(arret => {
+            allBusStops.push({
+              name: arret.nom,
+              region: 'Fianarantsoa',
+              lat: arret.lat,
+              lng: arret.lng,
+              ligne: line.nom,
+              couleur: line.couleur
+            });
+          });
+        }
+      });
+
+      legacyBusStops.forEach(stop => {
+        if (!allBusStops.some(s => s.name === stop.name)) {
+          allBusStops.push({
+            name: stop.name,
+            region: stop.region || 'Inconnu',
+            lat: stop.lat,
+            lng: stop.lng,
+            ligne: 'Arrêt standard'
+          });
+        }
+      });
+
+      arretsFianarantsoa.forEach(stop => {
+        if (!allBusStops.some(s => s.name === stop.nom)) {
+          allBusStops.push({
+            name: stop.nom,
+            region: 'Fianarantsoa',
+            lat: stop.lat,
+            lng: stop.lng,
+            ligne: 'Ligne Fianarantsoa'
+          });
+        }
+      });
+
+      setBusStopsList(allBusStops);
+
+    } catch (error) {
+      console.error('Erreur:', error);
+      const allZones = [];
+      for (const [region, data] of Object.entries(regionsData)) {
+        if (data?.zones) {
+          data.zones.forEach(zone => allZones.push(zone));
+        }
+      }
+      setAvailableDestinations(allZones);
+    }
+  }, []);
+
+  // ============================================================
+  // 2. GÉOLOCALISATION
+  // ============================================================
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -32,147 +167,174 @@ export default function ItineraryPopup({ isOpen, onClose, onCalculate, userLocat
             lng: position.coords.longitude
           };
           setCurrentPosition(pos);
+          setDepartureCoords(pos);
         },
         () => {
-          setCurrentPosition({ lat: -18.9137, lng: 47.5361 });
+          const pos = { lat: -18.9137, lng: 47.5361 };
+          setCurrentPosition(pos);
+          setDepartureCoords(pos);
         }
       );
     } else {
-      setCurrentPosition({ lat: -18.9137, lng: 47.5361 });
+      const pos = { lat: -18.9137, lng: 47.5361 };
+      setCurrentPosition(pos);
+      setDepartureCoords(pos);
     }
   }, []);
 
-  // Récupérer les données de trafic en temps réel (simulé)
-  useEffect(() => {
-    if (currentPosition) {
-      setRealTimeData({
-        segments: [
-          { id: 1, name: 'Avenue de l\'Indépendance', status: 'fluide', level: 20 },
-          { id: 2, name: 'Route d\'Anosizato', status: 'dense', level: 70 },
-          { id: 3, name: 'Boulevard Andraharo', status: 'modere', level: 45 },
-        ]
-      });
-    }
-  }, [currentPosition]);
+  // ============================================================
+  // 3. FONCTIONS DE RECHERCHE DE COORDONNÉES
+  // ============================================================
+  const findCoordinates = (locationName) => {
+    if (!locationName) return null;
 
-  // Générer les points de la route
-  const generateRoutePoints = (start, end) => {
-    const points = [];
-    const steps = 20;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const lat = start.lat + (end.lat - start.lat) * t;
-      const lng = start.lng + (end.lng - start.lng) * t;
-      const curve = Math.sin(t * Math.PI) * 0.005;
-      points.push({
-        lat: lat + curve * (i % 2 === 0 ? 1 : -1),
-        lng: lng + curve * 0.5
-      });
+    const lowerName = locationName.toLowerCase().trim();
+
+    const busStop = busStopsList.find(stop => 
+      stop.name.toLowerCase() === lowerName ||
+      stop.name.toLowerCase().includes(lowerName) ||
+      lowerName.includes(stop.name.toLowerCase())
+    );
+    if (busStop) {
+      return { lat: busStop.lat, lng: busStop.lng, name: busStop.name };
     }
-    return points;
+
+    const fianarStop = arretsFianarantsoa.find(stop => 
+      stop.nom.toLowerCase() === lowerName ||
+      stop.nom.toLowerCase().includes(lowerName)
+    );
+    if (fianarStop) {
+      return { lat: fianarStop.lat, lng: fianarStop.lng, name: fianarStop.nom };
+    }
+
+    const zoneCoords = getZoneCoordinates(locationName);
+    if (zoneCoords && zoneCoords.lat && zoneCoords.lng) {
+      return { lat: zoneCoords.lat, lng: zoneCoords.lng, name: locationName };
+    }
+
+    return null;
   };
 
-  // Trouver une destination
-  const findDestination = (query) => {
-    const places = {
-      'anosizato': { lat: -18.9050, lng: 47.5250 },
-      'andraharo': { lat: -18.8950, lng: 47.5150 },
-      'analakely': { lat: -18.9150, lng: 47.5360 },
-      'ivandry': { lat: -18.9200, lng: 47.5450 },
-      'ankorondrano': { lat: -18.9100, lng: 47.5300 },
-      'mahamasina': { lat: -18.9120, lng: 47.5280 },
-      '67ha': { lat: -18.9000, lng: 47.5400 },
-      'tanjombato': { lat: -18.9300, lng: 47.5500 },
-      'ambohimanarina': { lat: -18.8880, lng: 47.5100 },
-    };
-
-    const lowerQuery = query.toLowerCase();
-    for (const [key, value] of Object.entries(places)) {
-      if (lowerQuery.includes(key)) {
-        return { ...value, label: key };
-      }
-    }
-    return {
-      lat: -18.9137 + (Math.random() - 0.5) * 0.05,
-      lng: 47.5361 + (Math.random() - 0.5) * 0.05,
-      label: 'Destination'
-    };
+  const isValidLocation = (locationName) => {
+    if (!locationName) return false;
+    const lowerName = locationName.toLowerCase().trim();
+    
+    return availableDestinations.some(z => 
+      z.toLowerCase() === lowerName ||
+      z.toLowerCase().includes(lowerName) ||
+      lowerName.includes(z.toLowerCase())
+    );
   };
 
-  // Calculer l'itinéraire
+  // ============================================================
+  // 4. CALCUL DE L'ITINÉRAIRE
+  // ============================================================
   const handleCalculate = async () => {
-    if (!destination) return;
+    if (!destination) {
+      alert('Veuillez saisir une destination.');
+      return;
+    }
+
+    if (!isValidLocation(destination)) {
+      alert(`La destination "${destination}" n'est pas reconnue.`);
+      return;
+    }
 
     setIsCalculating(true);
     setResult(null);
     setShowSuggestions(false);
+    setRoutePoints([]);
 
     try {
-      // Tentative d'appel API
-      const response = await itineraryService.calculateRoute({
-        departure: departure === 'Ma position actuelle' ? currentPosition : { address: departure },
-        destination: { address: destination },
-        transportMode,
-        avoidTraffic
-      });
-
-      if (response && response.data) {
-        const data = response.data;
-        setRoutePoints(data.route || []);
-        setResult({
-          distance: data.distance || '8.5 km',
-          duration: data.duration || '25 min',
-          traffic: data.traffic || 'Moyen',
-          alerts: data.alerts || [],
-          bestTime: data.bestTime || {
-            now: '35 min',
-            recommended: '14h00',
-            recommendedDuration: '20 min'
-          }
-        });
-        setShowSuggestions(true);
-        setShowMap(true);
-        
-        if (onCalculate) {
-          onCalculate({
-            departure,
-            destination,
-            transportMode,
-            route: data.route || [],
-            result: data
-          });
+      let startCoords;
+      let startName = 'Antananarivo';
+      
+      if (departure === 'Ma position actuelle') {
+        startCoords = currentPosition || { lat: -18.9137, lng: 47.5361 };
+        startName = 'Ma position';
+      } else {
+        const startData = findCoordinates(departure);
+        if (startData) {
+          startCoords = { lat: startData.lat, lng: startData.lng };
+          startName = startData.name || departure;
+        } else {
+          startCoords = currentPosition || { lat: -18.9137, lng: 47.5361 };
         }
       }
-    } catch (error) {
-      // Fallback: données mockées
-      console.log('Utilisation des données mockées pour l\'itinéraire');
-      const start = currentPosition || { lat: -18.9137, lng: 47.5361 };
-      const end = findDestination(destination);
+
+      const endData = findCoordinates(destination);
+      if (!endData) {
+        alert(`Impossible de trouver les coordonnées de "${destination}"`);
+        setIsCalculating(false);
+        return;
+      }
       
-      const route = generateRoutePoints(start, end);
+      const endCoords = { lat: endData.lat, lng: endData.lng };
+      setDestinationCoords(endCoords);
+      setDepartureCoords(startCoords);
+
+      console.log('=== CALCUL ITINÉRAIRE ===');
+      console.log('Départ:', startName, startCoords);
+      console.log('Destination:', destination, endCoords);
+
+      // Générer la route
+      const route = generateRouteFromCoords(startCoords, endCoords);
       setRoutePoints(route);
 
-      const alerts = [
-        { id: 1, type: 'warning', location: 'Ankorondrano', message: 'Ralentissement modéré' },
-        { id: 2, type: 'danger', location: 'Analakely', message: 'Travaux en cours' },
-        { id: 3, type: 'warning', location: 'Ivandry', message: 'Accident signalé' },
-        { id: 4, type: 'warning', location: 'Mahamasina', message: 'Circulation dense' },
-      ];
+      // Calculer la distance
+      const distance = calculateDistance(startCoords, endCoords);
+      
+      // Déterminer le statut du trafic
+      const trafficStatus = getTrafficStatusForRoute(destination);
+      const conditionRoute = getConditionRouteForDestination(destination);
+      
+      // Calculer le temps selon le mode de transport
+      const travelTime = getTravelTimeByMode(
+        distance, 
+        transportMode, 
+        trafficStatus,
+        conditionRoute
+      );
 
+      // Générer les étapes
+      const generatedSteps = generateSteps(
+        departure === 'Ma position actuelle' ? 'Ma position' : departure,
+        destination,
+        transportMode
+      );
+      setSteps(generatedSteps);
+
+      const duration = travelTime.totalMinutes;
+      const optimized = getOptimizedTime(duration);
+      setOptimizedTime(optimized);
+
+      const alerts = getRouteAlerts(startName, destination);
       const filteredAlerts = avoidTraffic 
         ? alerts.filter(a => a.type !== 'danger')
         : alerts;
 
+      const trafficLevel = trafficData[destination] || 'Moyen';
+
+      const hours = ['08h00', '09h30', '10h00', '11h30', '13h00', '14h00', '15h30', '16h00', '17h00'];
+      const randomHour = hours[Math.floor(Math.random() * hours.length)];
+      const randomDuration = Math.floor(duration * (0.6 + Math.random() * 0.2));
+
       const resultData = {
-        distance: (Math.random() * 5 + 5).toFixed(1) + ' km',
-        duration: Math.floor(Math.random() * 30 + 15) + ' min',
-        traffic: ['Fluide', 'Moyen', 'Modéré', 'Dense'][Math.floor(Math.random() * 4)],
+        distance: `${distance.toFixed(1)} km`,
+        duration: travelTime.label,
+        durationMinutes: duration,
+        optimizedDuration: `${optimized}`,
+        traffic: trafficLevel,
         route: route,
         alerts: filteredAlerts,
+        steps: generatedSteps,
+        startPoint: startCoords,
+        endPoint: endCoords,
         bestTime: {
-          now: Math.floor(Math.random() * 20 + 20) + ' min',
-          recommended: ['14h00', '15h30', '16h00', '17h00'][Math.floor(Math.random() * 4)],
-          recommendedDuration: Math.floor(Math.random() * 15 + 10) + ' min'
+          now: travelTime.label,
+          optimized: `${optimized}`,
+          recommended: randomHour,
+          recommendedDuration: `${randomDuration} min`
         }
       };
 
@@ -182,18 +344,101 @@ export default function ItineraryPopup({ isOpen, onClose, onCalculate, userLocat
 
       if (onCalculate) {
         onCalculate({
-          departure,
+          departure: startName,
           destination,
           transportMode,
           route: route,
           result: resultData
         });
       }
+
+    } catch (error) {
+      console.error('Erreur de calcul:', error);
+      alert('Une erreur est survenue lors du calcul de l\'itinéraire.');
     } finally {
       setIsCalculating(false);
     }
   };
 
+  // ============================================================
+  // 5. FONCTIONS DE GÉNÉRATION DE ROUTE
+  // ============================================================
+  const generateRouteFromCoords = (start, end) => {
+    const points = [];
+    const steps = 30;
+    
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const lat = start.lat + (end.lat - start.lat) * t;
+      const lng = start.lng + (end.lng - start.lng) * t;
+      const curve = Math.sin(t * Math.PI) * 0.02;
+      points.push({
+        lat: lat + curve * (i % 2 === 0 ? 1 : -1),
+        lng: lng + curve * 0.5
+      });
+    }
+    
+    return points;
+  };
+
+  const calculateDistance = (start, end) => {
+    const R = 6371;
+    const dLat = (end.lat - start.lat) * Math.PI / 180;
+    const dLon = (end.lng - start.lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(start.lat * Math.PI / 180) * Math.cos(end.lat * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const getTrafficStatusForRoute = (destination) => {
+    // Simuler le statut du trafic en fonction de la destination
+    const statuses = ['VERT', 'ORANGE', 'ROUGE'];
+    const weights = { 'VERT': 0.4, 'ORANGE': 0.4, 'ROUGE': 0.2 };
+    let random = Math.random();
+    let cumulative = 0;
+    for (const status of statuses) {
+      cumulative += weights[status];
+      if (random <= cumulative) return status;
+    }
+    return 'VERT';
+  };
+
+  const getConditionRouteForDestination = (destination) => {
+    // Simuler l'état de la route
+    const conditions = ['BONNE', 'MOYENNE', 'MAUVAISE'];
+    const weights = { 'BONNE': 0.4, 'MOYENNE': 0.4, 'MAUVAISE': 0.2 };
+    let random = Math.random();
+    let cumulative = 0;
+    for (const condition of conditions) {
+      cumulative += weights[condition];
+      if (random <= cumulative) return condition;
+    }
+    return 'BONNE';
+  };
+
+  const getOptimizedTime = (duration) => {
+    const optimized = Math.floor(duration * 0.85);
+    const hours = Math.floor(optimized / 60);
+    const minutes = optimized % 60;
+    return hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
+  };
+
+  // ============================================================
+  // 6. NETTOYAGE
+  // ============================================================
+  useEffect(() => {
+    if (!isOpen) {
+      setResult(null);
+      setRoutePoints([]);
+      setShowSuggestions(false);
+    }
+  }, [isOpen]);
+
+  // ============================================================
+  // 7. RENDU
+  // ============================================================
   if (!isOpen) return null;
 
   return (
@@ -224,79 +469,136 @@ export default function ItineraryPopup({ isOpen, onClose, onCalculate, userLocat
                     }`}
                   >
                     <AlertTriangle className="w-3 h-3" />
-                    {avoidTraffic ? 'Éviter trafic' : 'Éviter trafic'}
+                    {avoidTraffic ? '🚫 Éviter trafic' : '🚦 Éviter trafic'}
                   </button>
                   <button
                     onClick={() => setShowMap(!showMap)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition bg-blue-500 text-white hover:bg-blue-600"
                   >
                     {showMap ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                    {showMap ? 'Cacher' : 'Voir'}
+                    {showMap ? 'Cacher carte' : 'Voir carte'}
+                  </button>
+                  <button
+                    onClick={() => setShowSteps(!showSteps)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition bg-purple-500 text-white hover:bg-purple-600"
+                  >
+                    {showSteps ? '📋 Étapes' : '📋 Étapes'}
                   </button>
                   {currentPosition && (
                     <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-lg">
-                      ✓ Position trouvée
+                      📍 Position trouvée
                     </span>
                   )}
                 </div>
 
-                <div className="space-y-4">
-                  <ItineraryForm
-                    departure={departure}
-                    setDeparture={setDeparture}
-                    destination={destination}
-                    setDestination={setDestination}
-                    transportMode={transportMode}
-                    setTransportMode={setTransportMode}
-                    isCalculating={isCalculating}
-                    onCalculate={handleCalculate}
-                  />
+                <ItineraryForm
+                  departure={departure}
+                  setDeparture={setDeparture}
+                  destination={destination}
+                  setDestination={setDestination}
+                  transportMode={transportMode}
+                  setTransportMode={setTransportMode}
+                  isCalculating={isCalculating}
+                  onCalculate={handleCalculate}
+                  availableDestinations={availableDestinations}
+                />
 
-                  {result && (
-                    <>
-                      <ItinerarySummary
-                        distance={result.distance}
-                        duration={result.duration}
-                        traffic={result.traffic}
-                      />
+                {result && (
+                  <>
+                    <ItinerarySummary
+                      distance={result.distance}
+                      duration={result.duration}
+                      traffic={result.traffic}
+                      transportMode={transportMode}
+                    />
 
-                      {showSuggestions && (
-                        <div className="space-y-4">
-                          <ItinerarySuggestions routes={[
-                            { id: 1, name: '✅ Recommandé', duration: result.duration, distance: result.distance, traffic: result.traffic, color: 'green' },
-                            { id: 2, name: '🔄 Alternatif', duration: (parseInt(result.duration) + 5) + ' min', distance: (parseFloat(result.distance) + 0.7).toFixed(1) + ' km', traffic: 'Modéré', color: 'yellow' },
-                            { id: 3, name: '🔄 Éviter bouchons', duration: (parseInt(result.duration) + 15) + ' min', distance: (parseFloat(result.distance) + 2.8).toFixed(1) + ' km', traffic: 'Dense', color: 'red' },
-                          ]} />
-
-                          {result.alerts && result.alerts.length > 0 && (
-                            <ItineraryAlerts alerts={result.alerts} />
-                          )}
-
-                          {result.bestTime && (
-                            <ItineraryBestTime bestTime={result.bestTime} />
-                          )}
+                    {result.optimizedDuration && (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-3 border border-green-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-green-700">⚡ Temps optimisé</span>
+                          <span className="text-sm font-bold text-green-700">{result.optimizedDuration}</span>
                         </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                        <p className="text-xs text-green-600 mt-1">
+                          ✨ Gain de temps par rapport au trajet standard
+                        </p>
+                      </div>
+                    )}
+
+                    {showSteps && steps.length > 0 && (
+                      <ItinerarySteps
+                        steps={steps}
+                        transportMode={transportMode}
+                        duration={result.optimizedDuration || result.duration}
+                        distance={result.distance}
+                      />
+                    )}
+
+                    {showSuggestions && (
+                      <div className="space-y-4">
+                        <ItinerarySuggestions routes={[
+                          { 
+                            id: 1, 
+                            name: '✅ Recommandé', 
+                            duration: result.optimizedDuration || result.duration, 
+                            distance: result.distance, 
+                            traffic: result.traffic, 
+                            color: 'green' 
+                          },
+                          { 
+                            id: 2, 
+                            name: '🔄 Alternatif', 
+                            duration: (parseInt(result.duration) + 15) + ' min', 
+                            distance: (parseFloat(result.distance) + 12).toFixed(1) + ' km', 
+                            traffic: 'Modéré', 
+                            color: 'yellow' 
+                          },
+                          { 
+                            id: 3, 
+                            name: '🔄 Éviter bouchons', 
+                            duration: (parseInt(result.duration) + 30) + ' min', 
+                            distance: (parseFloat(result.distance) + 25).toFixed(1) + ' km', 
+                            traffic: 'Dense', 
+                            color: 'red' 
+                          },
+                        ]} />
+
+                        {result.alerts && result.alerts.length > 0 && (
+                          <ItineraryAlerts alerts={result.alerts} />
+                        )}
+
+                        {result.bestTime && (
+                          <ItineraryBestTime bestTime={result.bestTime} />
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Colonne droite - Carte */}
               <div className={`lg:block ${!showMap ? 'hidden' : ''}`}>
                 <div className="h-[450px] rounded-2xl overflow-hidden border border-slate-200">
                   <ItineraryMap
-                    startPoint={currentPosition}
+                    startPoint={departureCoords || currentPosition}
                     routePoints={routePoints}
-                    destination={destination ? findDestination(destination) : null}
+                    destination={destinationCoords}
+                    destinationName={destination}
                     showRoute={showMap}
                     avoidTraffic={avoidTraffic}
-                    realTimeData={realTimeData}
+                    steps={steps}
+                    userLocation={currentPosition}
                   />
                 </div>
-                <p className="text-xs text-slate-400 mt-2 text-center">
-                  🗺️ Itinéraire recommandé
-                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-slate-400">
+                    🗺️ {destination ? `Itinéraire vers ${destination}` : 'Sélectionnez une destination'}
+                  </p>
+                  {result?.optimizedDuration && (
+                    <p className="text-xs text-green-600 font-medium">
+                      ⚡ {result.optimizedDuration}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
