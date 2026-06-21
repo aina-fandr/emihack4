@@ -13,6 +13,7 @@ app.use(cors({ origin: '*' })); // Permet à ton React de se connecter sans bloc
 app.use(express.json());       // Permet de lire le JSON dans req.body (très important pour le chat)
 
 // Liaison des Routes API
+app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/traffic', require('./src/routes/trafficRoutes'));
 app.use('/api/chat', require('./src/routes/chatRoutes'));
 app.use('/api/predictions', require('./src/routes/predictionRoutes'));

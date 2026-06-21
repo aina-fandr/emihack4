@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const passport = require('passport');
 const authController = require('../controllers/authController'); // Ton contrôleur d'inscription/connexion classique
 
 // ==========================================
@@ -9,28 +8,7 @@ const authController = require('../controllers/authController'); // Ton contrôl
 router.post('/register', authController.register);
 router.post('/login', authController.login);
 
-// ==========================================
-// 2. AUTHENTIFICATION GOOGLE OAUTH2
-// ==========================================
-
-// Route déclenchée par React pour initier la connexion Google
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-
-// Route utilisée par le front-end React pour vérifier un token Google côté backend
-router.post('/google', authController.googleLogin);
-
-// URL de redirection après validation par Google
-router.get('/google/callback', 
-  passport.authenticate('google', { failureRedirect: '/login' }),
-  (req, res) => {
-    // Authentification réussie ! 
-    // Comme React tourne sur un autre port (ex: 3000), on redirige vers le frontend avec les infos
-    // Idéalement, transmet un token ou laisse la session s'occuper du cookie
-    res.redirect('http://localhost:3000/');
-  }
-);
-
-// Route pour vérifier l'état de la session (appelée par le useEffect de ton App.js)
+// Route pour vérifier l'état de la session (si tu en as besoin)
 router.get('/login/success', (req, res) => {
   if (req.user) {
     res.status(200).json({
