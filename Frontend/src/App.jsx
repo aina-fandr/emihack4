@@ -4,7 +4,7 @@ import Carte from './pages/Carte';
 import DashboardPolice from './pages/DashboardPolice';
 import Navbar from './components/layout/Navbar';
 import Sidebar from './components/layout/Sidebar';
-import 
+
 function App() {
   const [currentTab, setCurrentTab] = useState('accueil');
   const [sidebarOpen, setSidebarOpen] = useState(false);
