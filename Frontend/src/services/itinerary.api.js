@@ -10,60 +10,42 @@ const itineraryApi = axios.create({
   timeout: 15000,
 });
 
-// Intercepteur pour ajouter le token
-itineraryApi.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+// Intercepteur pour injecter le token d'authentification
+itineraryApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
-// Services pour l'itinéraire
 export const itineraryService = {
-  // Calculer un itinéraire
-  calculateRoute: async (data) => {
+  /**
+   * Calcule le meilleur itinéraire en fonction du trafic
+   * @param {Object} params 
+   * @param {string} params.start - Coordonnées ou adresse de départ
+   * @param {string} params.destination - Coordonnées ou adresse d'arrivée
+   * @param {string} params.mode - "voiture", "bus", "marche", "moto"
+   */
+  getItinerary: async (params) => {
     try {
-      const response = await itineraryApi.post('/itinerary/calculate', data);
+      const response = await itineraryApi.get('/itineraries/calculate', { params });
       return response.data;
     } catch (error) {
-      console.error('Erreur lors du calcul d\'itinéraire:', error);
+      console.error('Erreur lors du calcul de l\'itinéraire:', error);
       throw error;
     }
   },
 
-  // Obtenir des suggestions d'itinéraires
-  getSuggestions: async (params) => {
+  /**
+   * Sauvegarde un itinéraire dans l'historique de l'utilisateur
+   */
+  saveItinerary: async (itineraryData) => {
     try {
-      const response = await itineraryApi.get('/itinerary/suggestions', { params });
+      const response = await itineraryApi.post('/itineraries/save', itineraryData);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors du chargement des suggestions:', error);
-      throw error;
-    }
-  },
-
-  // Obtenir les alertes trafic sur un itinéraire
-  getAlerts: async (routeId) => {
-    try {
-      const response = await itineraryApi.get(`/itinerary/alerts/${routeId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Erreur lors du chargement des alertes:', error);
-      throw error;
-    }
-  },
-
-  // Obtenir la meilleure heure de départ
-  getBestTime: async (params) => {
-    try {
-      const response = await itineraryApi.get('/itinerary/best-time', { params });
-      return response.data;
-    } catch (error) {
-      console.error('Erreur lors du calcul de la meilleure heure:', error);
+      console.error('Erreur lors de la sauvegarde:', error);
       throw error;
     }
   }

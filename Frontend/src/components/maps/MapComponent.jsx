@@ -1,104 +1,101 @@
-import React, { useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import React, { useState, useRef, useEffect } from 'react';
+import { MapContainer, TileLayer, Polyline, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Crosshair, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 
-// Configuration des icônes Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// Composant pour contrôler la carte
-function MapControls({ onLocationFound }) {
+// Forcer le déplacement fluide de la carte lors des changements de zone
+function ChangeView({ center, zoom }) {
   const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.flyTo(center, zoom, { animate: true, duration: 1.2 });
+    }
+  }, [center, zoom, map]);
+  return null;
+}
 
-  const handleLocate = () => {
-    map.locate({ setView: true, maxZoom: 16 });
-  };
-
-  const handleReset = () => {
-    map.setView([-18.9137, 47.5361], 13);
-  };
-
-  const handleZoomIn = () => {
-    map.zoomIn();
-  };
-
-  const handleZoomOut = () => {
-    map.zoomOut();
-  };
-
+function MapControls() {
+  const map = useMap();
   return (
-    <>
-      {/* Contrôles de zoom */}
-      <div className="absolute bottom-8 right-6 z-[1000] flex flex-col gap-2">
-        <button
-          onClick={handleZoomIn}
-          className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Zoom avant"
-        >
-          <ZoomIn className="w-5 h-5 text-slate-700" />
-        </button>
-        <button
-          onClick={handleZoomOut}
-          className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Zoom arrière"
-        >
-          <ZoomOut className="w-5 h-5 text-slate-700" />
-        </button>
-        <button
-          onClick={handleReset}
-          className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Réinitialiser"
-        >
-          <RefreshCw className="w-5 h-5 text-slate-700" />
-        </button>
-        <button
-          onClick={handleLocate}
-          className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-          title="Ma position"
-        >
-          <Crosshair className="w-5 h-5 text-blue-500" />
-        </button>
-      </div>
-    </>
+    <div className="absolute bottom-8 right-6 z-[1000] flex flex-col gap-2">
+      <button onClick={() => map.zoomIn()} className="bg-white/95 p-3 rounded-xl shadow-xl border border-slate-200/50 hover:bg-slate-50 transition-colors"><ZoomIn className="w-5 h-5 text-slate-700" /></button>
+      <button onClick={() => map.zoomOut()} className="bg-white/95 p-3 rounded-xl shadow-xl border border-slate-200/50 hover:bg-slate-50 transition-colors"><ZoomOut className="w-5 h-5 text-slate-700" /></button>
+      <button onClick={() => map.setView([-18.9137, 47.5361], 13)} className="bg-white/95 p-3 rounded-xl shadow-xl border border-slate-200/50 hover:bg-slate-50 transition-colors"><RefreshCw className="w-5 h-5 text-slate-700" /></button>
+    </div>
   );
 }
 
-// Composant principal - Chargement instantané
-export default function MapComponent({ center = [-18.9137, 47.5361], zoom = 13, onLocationFound }) {
+export default function MapComponent({ center = [-18.9137, 47.5361], zoom = 12, trafficPoints = [] }) {
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
 
+  const getTrafficColor = (status) => {
+    switch (status) {
+      case 'fluide': return '#22c55e';   // Green-500
+      case 'modere': return '#eab308';   // Yellow-500
+      case 'dense': return '#f97316';    // Orange-500
+      case 'bloque': return '#ef4444';   // Red-500
+      default: return '#22c55e';
+    }
+  };
+
   return (
     <div className="w-full h-full relative">
-      <MapContainer
-        center={center}
-        zoom={zoom}
-        className="w-full h-full"
-        zoomControl={false}
-        ref={mapRef}
-        whenReady={() => setMapReady(true)}
-      >
+      <MapContainer center={center} zoom={zoom} className="w-full h-full" zoomControl={false} ref={mapRef} whenReady={() => setMapReady(true)}>
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          attribution='&copy; OpenStreetMap contributors'
         />
         
-        {mapReady && <MapControls onLocationFound={onLocationFound} />}
+        <ChangeView center={center} zoom={zoom} />
+        {mapReady && <MapControls />}
         
-        <Marker position={center}>
-          <Popup>
-            <div className="text-center">
-              <p className="font-bold text-black">🚦 TrafficAssist</p>
-              <p className="text-sm text-slate-500">Antananarivo</p>
-            </div>
-          </Popup>
-        </Marker>
+        {/* 🗺️ TRACÉ DES AXES AVEC NOM FLOTTANT SANS RÉPÉTITION */}
+        {trafficPoints.map((axis) => {
+          if (axis.lat_start && axis.lng_start && axis.lat_end && axis.lng_end) {
+            const positions = [
+              [parseFloat(axis.lat_start), parseFloat(axis.lng_start)],
+              [parseFloat(axis.lat_end), parseFloat(axis.lng_end)]
+            ];
+
+            return (
+              <Polyline
+                key={`route-${axis.id}`}
+                positions={positions}
+                pathOptions={{
+                  color: getTrafficColor(axis.status),
+                  weight: 6,         
+                  opacity: 0.85,
+                  lineCap: 'round'
+                }}
+              >
+                {/* Si l'axe est marqué pour afficher son libellé flottant */}
+                {axis.showLabelOnMap && (
+                  <Tooltip 
+                    permanent 
+                    direction="center" 
+                    sticky
+                    className="bg-slate-900/90 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-md border border-slate-700 pointer-events-none uppercase tracking-wide opacity-90"
+                  >
+                    {axis.road}
+                  </Tooltip>
+                )}
+
+                <Popup>
+                  <div className="text-slate-800 p-1">
+                    <p className="font-bold text-sm border-b pb-1 mb-1">{axis.road}</p>
+                    <p className="text-xs">🏙️ Ville : {axis.city}</p>
+                    <p className="text-xs font-semibold">
+                      État : <span style={{ color: getTrafficColor(axis.status) }}>{axis.status.toUpperCase()} ({axis.level}%)</span>
+                    </p>
+                  </div>
+                </Popup>
+              </Polyline>
+            );
+          }
+          return null;
+        })}
       </MapContainer>
     </div>
   );

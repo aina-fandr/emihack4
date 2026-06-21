@@ -1,24 +1,163 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MapComponent from '../components/maps/MapComponent';
 import Legend from '../components/common/Legend';
 import ChatAssistant from '../components/common/ChatAssistant';
 import ItineraryPopup from '../components/Itinerary/ItineraryPopup';
+import PredictionPopup from '../components/Prediction/PredictionPopup';
+import { predictionService } from '../services/prediction.api'; // ✅ service réel
+
+// Fallback pour les coordonnées (à remplacer par vos données réelles)
+const getZoneCoordinates = (zone) => {
+  const coords = {
+    'Antananarivo': { lat: -18.9137, lng: 47.5361 },
+    'Ankorondrano': { lat: -18.9012, lng: 47.5234 },
+    'Ivato': { lat: -18.7912, lng: 47.4845 },
+    'Toamasina': { lat: -18.1497, lng: 49.4023 },
+    'Mahajanga': { lat: -15.7167, lng: 46.3167 },
+    'Antsirabe': { lat: -19.8667, lng: 47.0333 },
+    'Fianarantsoa': { lat: -21.4333, lng: 47.0833 },
+  };
+  return coords[zone] || { lat: -18.9137, lng: 47.5361 };
+};
 
 export default function Accueil() {
   const [activeMenu, setActiveMenu] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showItinerary, setShowItinerary] = useState(false);
+  const [showPrediction, setShowPrediction] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedResult, setSelectedResult] = useState(null);
+
+  // Données dynamiques
+  const [regionsData, setRegionsData] = useState({});
+  const [trafficData, setTrafficData] = useState({}); // simulé ou à venir
+
+  // Charger les provinces depuis l'API
+  useEffect(() => {
+    const fetchRegions = async () => {
+      try {
+        const data = await predictionService.getProvinces();
+        setRegionsData(data || {});
+        // Simuler des données de trafic pour chaque zone
+        const traffic = {};
+        Object.values(data).forEach(info => {
+          if (info.zones) {
+            info.zones.forEach(zone => {
+              traffic[zone] = ['Fluide', 'Moyen', 'Modéré', 'Dense'][Math.floor(Math.random() * 4)];
+            });
+          }
+        });
+        setTrafficData(traffic);
+      } catch (error) {
+        console.error('Erreur chargement provinces:', error);
+      }
+    };
+    fetchRegions();
+  }, []);
+
+  // Générer toutes les données de recherche
+  const generateSearchData = () => {
+    const data = [];
+    if (!regionsData || typeof regionsData !== 'object') return data;
+    try {
+      for (const [region, info] of Object.entries(regionsData)) {
+        if (info && info.zones && Array.isArray(info.zones)) {
+          info.zones.forEach(zone => {
+            const coords = getZoneCoordinates(zone);
+            data.push({
+              id: `${region}-${zone}`,
+              name: zone,
+              type: 'Zone',
+              region: region,
+              lat: coords.lat || -18.9137,
+              lng: coords.lng || 47.5361,
+              traffic: trafficData[zone] || 'Fluide'
+            });
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Erreur génération données recherche:', error);
+    }
+    return data;
+  };
+
+  const searchData = generateSearchData();
+
+  // Fonction de recherche
+  const handleSearch = (query) => {
+    if (!query || query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    const lowerQuery = query.toLowerCase();
+    setTimeout(() => {
+      const results = searchData.filter(item =>
+        item.name.toLowerCase().includes(lowerQuery) ||
+        (item.region && item.region.toLowerCase().includes(lowerQuery))
+      );
+      setSearchResults(results);
+      setIsSearching(false);
+    }, 300);
+  };
+
+  const handleSelectResult = (result) => {
+    setSelectedResult(result);
+    setSearchQuery(result.name);
+    setSearchOpen(false);
+    setSearchResults([]);
+  };
+
+  // Géolocalisation
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        () => {
+          setUserLocation({ lat: -18.9137, lng: 47.5361 });
+        }
+      );
+    } else {
+      setUserLocation({ lat: -18.9137, lng: 47.5361 });
+    }
+  }, []);
 
   const handleItineraryCalculate = (data) => {
     console.log('Itinéraire calculé:', data);
-    // Ici on peut tracer la route sur la carte
+  };
+
+  // Couleur du trafic
+  const getTrafficColor = (traffic) => {
+    const colors = {
+      'Fluide': '#22c55e',
+      'Moyen': '#eab308',
+      'Modéré': '#f97316',
+      'Dense': '#ef4444',
+      'Très dense': '#dc2626'
+    };
+    return colors[traffic] || '#22c55e';
   };
 
   return (
     <div className="w-full h-full relative">
       {/* Carte */}
       <div className="absolute inset-0 z-0">
-        <MapComponent />
+        <MapComponent
+          userLocation={userLocation}
+          selectedLocation={selectedResult}
+          searchResults={searchResults}
+          allRegions={regionsData}
+          trafficData={trafficData}
+        />
       </div>
 
       {/* Légende */}
@@ -26,13 +165,15 @@ export default function Accueil() {
         <Legend />
       </div>
 
-      {/* Menu des actions latérales - les 3 boutons disparaissent quand le popup est ouvert */}
-      {!showItinerary && (
+      {/* Menu des actions latérales */}
+      {!showItinerary && !showPrediction && (
         <div className="absolute top-20 md:top-24 right-4 md:right-8 z-[1000] flex flex-col gap-2 md:gap-3">
           <button
             onClick={() => setActiveMenu(activeMenu === 'signaler' ? null : 'signaler')}
-            className={`w-36 md:w-44 bg-red-500/90 hover:bg-red-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-red-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
-              activeMenu === 'signaler' ? 'ring-2 ring-red-400/50 ring-offset-2 ring-offset-black' : ''
+            className={`w-36 md:w-44 bg-red-500/90 hover:bg-red-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl border border-red-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
+              activeMenu === 'signaler'
+                ? 'ring-2 ring-red-400/50 ring-offset-2 ring-offset-black shadow-[0_8px_30px_rgba(239,68,68,0.4)]'
+                : 'shadow-[0_8px_25px_rgba(239,68,68,0.35)] hover:shadow-[0_12px_35px_rgba(239,68,68,0.5)]'
             }`}
           >
             <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,8 +184,10 @@ export default function Accueil() {
 
           <button
             onClick={() => setShowItinerary(true)}
-            className={`w-36 md:w-44 bg-blue-500/90 hover:bg-blue-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-blue-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
-              activeMenu === 'itineraire' ? 'ring-2 ring-blue-400/50 ring-offset-2 ring-offset-black' : ''
+            className={`w-36 md:w-44 bg-blue-500/90 hover:bg-blue-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl border border-blue-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
+              activeMenu === 'itineraire'
+                ? 'ring-2 ring-blue-400/50 ring-offset-2 ring-offset-black shadow-[0_8px_30px_rgba(59,130,246,0.4)]'
+                : 'shadow-[0_8px_25px_rgba(59,130,246,0.35)] hover:shadow-[0_12px_35px_rgba(59,130,246,0.5)]'
             }`}
           >
             <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -54,9 +197,11 @@ export default function Accueil() {
           </button>
 
           <button
-            onClick={() => setActiveMenu(activeMenu === 'prediction' ? null : 'prediction')}
-            className={`w-36 md:w-44 bg-orange-500/90 hover:bg-orange-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl shadow-lg border border-orange-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
-              activeMenu === 'prediction' ? 'ring-2 ring-orange-400/50 ring-offset-2 ring-offset-black' : ''
+            onClick={() => setShowPrediction(true)}
+            className={`w-36 md:w-44 bg-purple-500/90 hover:bg-purple-600 text-white font-semibold py-2 md:py-3 px-3 md:px-4 rounded-xl border border-purple-400/30 text-xs md:text-sm tracking-wide transition-all duration-300 transform hover:scale-105 hover:translate-x-[-4px] flex items-center gap-2 md:gap-3 ${
+              activeMenu === 'prediction'
+                ? 'ring-2 ring-purple-400/50 ring-offset-2 ring-offset-black shadow-[0_8px_30px_rgba(168,85,247,0.4)]'
+                : 'shadow-[0_8px_25px_rgba(168,85,247,0.35)] hover:shadow-[0_12px_35px_rgba(168,85,247,0.5)]'
             }`}
           >
             <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -67,48 +212,129 @@ export default function Accueil() {
         </div>
       )}
 
-      {/* Popup Itinéraire */}
+      {/* Popups */}
       <ItineraryPopup
         isOpen={showItinerary}
         onClose={() => setShowItinerary(false)}
         onCalculate={handleItineraryCalculate}
+        userLocation={userLocation}
+      />
+
+      <PredictionPopup
+        isOpen={showPrediction}
+        onClose={() => setShowPrediction(false)}
       />
 
       {/* Bouton de recherche flottant */}
       <div className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-[1000]">
         <div className="transition-all duration-300">
           {!searchOpen ? (
-            <button 
+            <button
               onClick={() => setSearchOpen(true)}
-              className="bg-gradient-to-r from-blue-500/90 to-blue-600/90 hover:from-blue-600 hover:to-blue-700 p-3 md:p-5 rounded-2xl shadow-2xl border border-blue-400/30 flex items-center justify-center transition-all duration-300 transform hover:scale-110 hover:rotate-12 animate-bounce-slow"
+              className="bg-gradient-to-r from-blue-500/90 to-blue-600/90 hover:from-blue-600 hover:to-blue-700 p-3 md:p-5 rounded-2xl shadow-2xl border border-blue-400/30 flex items-center justify-center transition-all duration-300 transform hover:scale-110 hover:rotate-12 animate-bounce-slow shadow-[0_8px_30px_rgba(59,130,246,0.4)]"
             >
               <svg className="w-5 h-5 md:w-7 md:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </button>
           ) : (
-            <div className="bg-black/90 backdrop-blur-md rounded-2xl px-4 md:px-6 py-3 md:py-4 shadow-2xl border border-blue-500/30 flex items-center gap-3 md:gap-4 w-64 md:w-96 animate-fade-in-up">
-              <svg onClick={() => setSearchOpen(false)} className="w-4 h-4 md:w-5 md:h-5 text-blue-400 cursor-pointer hover:text-blue-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input 
-                type="text" 
-                placeholder="Rechercher un lieu..." 
-                className="w-full bg-transparent text-xs md:text-sm font-medium text-white placeholder-slate-400 focus:outline-none"
-                autoFocus
-              />
-              <button 
-                onClick={() => setSearchOpen(false)}
-                className="text-slate-400 hover:text-white transition"
-              >
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            <div className="bg-black/90 backdrop-blur-md rounded-2xl shadow-2xl border border-blue-500/30 overflow-hidden w-80 md:w-96 animate-fade-in-up shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4">
+                <svg onClick={() => setSearchOpen(false)} className="w-4 h-4 md:w-5 md:h-5 text-blue-400 cursor-pointer hover:text-blue-300 transition flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-              </button>
+                <input
+                  type="text"
+                  placeholder="Rechercher une ville, une zone..."
+                  className="w-full bg-transparent text-xs md:text-sm font-medium text-white placeholder-slate-400 focus:outline-none"
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    handleSearch(e.target.value);
+                  }}
+                />
+                {isSearching && (
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                )}
+                <button
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }}
+                  className="text-slate-400 hover:text-white transition flex-shrink-0"
+                >
+                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Résultats */}
+              {searchResults.length > 0 && (
+                <div className="border-t border-slate-700 max-h-60 overflow-y-auto">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      onClick={() => handleSelectResult(result)}
+                      className="w-full flex items-center justify-between px-4 md:px-6 py-2.5 hover:bg-slate-800 transition text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: getTrafficColor(result.traffic) }}
+                        ></div>
+                        <div>
+                          <p className="text-sm text-white font-medium">{result.name}</p>
+                          <p className="text-xs text-slate-400">{result.region || 'Région inconnue'}</p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-700">
+                          {result.traffic}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
+                <div className="px-4 md:px-6 py-4 text-center text-slate-400 text-sm border-t border-slate-700">
+                  <p>Aucun résultat trouvé pour "{searchQuery}"</p>
+                </div>
+              )}
+
+              {searchQuery.length > 0 && searchQuery.length < 2 && (
+                <div className="px-4 md:px-6 py-3 text-center text-slate-500 text-xs border-t border-slate-700">
+                  Tapez au moins 2 caractères
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Résultat sélectionné */}
+      {selectedResult && (
+        <div className="absolute top-24 left-4 z-[1000] bg-black/80 backdrop-blur-md rounded-xl px-4 py-2 border border-blue-500/30">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: getTrafficColor(selectedResult.traffic) }}
+            ></div>
+            <span className="text-sm text-white font-medium">{selectedResult.name}</span>
+            <span className="text-xs text-slate-400">• {selectedResult.region || 'Région inconnue'}</span>
+            <button
+              onClick={() => setSelectedResult(null)}
+              className="text-slate-400 hover:text-white ml-2"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Assistant IA */}
       <ChatAssistant />
