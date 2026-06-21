@@ -36,3 +36,36 @@
     transform: rotate(360deg);
   }
 }
+/* Styles pour la carte */
+.mapboxgl-popup {
+  max-width: 200px;
+}
+
+.mapboxgl-popup-content {
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0;
+}
+
+.traffic-popup .mapboxgl-popup-content {
+  padding: 8px;
+}
+
+.mapboxgl-popup-close-button {
+  color: white;
+  font-size: 16px;
+  padding: 4px 8px;
+}
+
+.mapboxgl-popup-tip {
+  border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+/* Animation des routes */
+@keyframes dash {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}

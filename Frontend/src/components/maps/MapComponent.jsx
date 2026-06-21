@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from 'react-leaflet';
+// components/maps/MapComponent.jsx
+import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Crosshair, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 
-// Configuration des icônes Leaflet
+// Correction des icônes Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -12,319 +11,302 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Icône verte pour l'utilisateur
-const userIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+// Coordonnées des routes de Madagascar
+const ROADS_DATA = [
+  {
+    road: 'RN1',
+    name: 'Route Nationale 1',
+    region: 'Analamanga',
+    city: 'Antananarivo',
+    coordinates: [
+      [-18.91368, 47.53613],
+      [-18.90500, 47.52500],
+      [-18.89500, 47.51500],
+      [-18.87919, 47.50794]
+    ]
+  },
+  {
+    road: 'RN2',
+    name: 'Route Nationale 2',
+    region: 'Analamanga',
+    city: 'Antananarivo',
+    coordinates: [
+      [-18.90378, 47.52634],
+      [-18.91500, 47.53500],
+      [-18.92500, 47.54300],
+      [-18.93044, 47.54647]
+    ]
+  },
+  {
+    road: 'RN3',
+    name: 'Route Nationale 3',
+    region: 'Analamanga',
+    city: 'Antananarivo',
+    coordinates: [
+      [-18.91124, 47.51488],
+      [-18.90300, 47.51000],
+      [-18.89350, 47.50868]
+    ]
+  },
+  {
+    road: 'RN4',
+    name: 'Route Nationale 4',
+    region: 'Atsinanana',
+    city: 'Toamasina',
+    coordinates: [
+      [-18.15523, 49.39237],
+      [-18.14700, 49.39800],
+      [-18.14193, 49.40578]
+    ]
+  },
+  {
+    road: 'RN6',
+    name: 'Route Nationale 6',
+    region: 'Boeny',
+    city: 'Mahajanga',
+    coordinates: [
+      [-15.71667, 46.31667],
+      [-15.72400, 46.32800],
+      [-15.72987, 46.33558]
+    ]
+  },
+  {
+    road: 'RN7',
+    name: 'Route Nationale 7',
+    region: 'Vakinankaratra',
+    city: 'Antsirabe',
+    coordinates: [
+      [-19.86583, 47.03333],
+      [-19.85500, 47.04800],
+      [-19.84526, 47.06376]
+    ]
+  },
+  {
+    road: 'RN10',
+    name: 'Route Nationale 10',
+    region: 'Diana',
+    city: 'Antsiranana',
+    coordinates: [
+      [-12.27823, 49.29171],
+      [-12.28300, 49.29900],
+      [-12.28660, 49.30550]
+    ]
+  },
+  {
+    road: 'RN11',
+    name: 'Route Nationale 11',
+    region: 'Diana',
+    city: 'Nosy Be',
+    coordinates: [
+      [-13.31500, 48.26760],
+      [-13.32000, 48.27400],
+      [-13.32228, 48.27893]
+    ]
+  }
+];
 
-// Icône pour les résultats de recherche
-const searchIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-// Couleurs de trafic
-const trafficColors = {
-  'Fluide': '#22c55e',
-  'Moyen': '#eab308',
-  'Modéré': '#f97316',
-  'Dense': '#ef4444',
-  'Très dense': '#dc2626'
+// Couleurs selon le statut du trafic
+const TRAFFIC_COLORS = {
+  fluide: '#22c55e',
+  modere: '#eab308',
+  dense: '#f97316',
+  bloque: '#ef4444'
 };
 
-const getTrafficColor = (traffic) => {
-  return trafficColors[traffic] || '#22c55e';
-};
+export default function MapComponent({ center, zoom, userLocation, trafficData, searchResults }) {
+  const mapContainer = useRef(null);
+  const mapInstance = useRef(null);
+  const routesLayer = useRef(null);
+  const markersLayer = useRef(null);
 
-// Composant de contrôle de la carte
-function MapControls({ mapRef }) {
-  const map = useMap();
-
-  const handleZoomIn = () => {
-    map.zoomIn();
-  };
-
-  const handleZoomOut = () => {
-    map.zoomOut();
-  };
-
-  const handleReset = () => {
-    map.setView([-18.9137, 47.5361], 13);
-  };
-
-  const handleLocate = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          map.setView([position.coords.latitude, position.coords.longitude], 16);
-        },
-        () => {
-          alert('Position non disponible');
-        }
-      );
-    } else {
-      alert('Géolocalisation non supportée');
-    }
-  };
-
-  return (
-    <div className="absolute bottom-8 right-6 z-[1000] flex flex-col gap-2">
-      <button
-        onClick={handleZoomIn}
-        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-        title="Zoom avant"
-      >
-        <ZoomIn className="w-5 h-5 text-slate-700" />
-      </button>
-      <button
-        onClick={handleZoomOut}
-        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-        title="Zoom arrière"
-      >
-        <ZoomOut className="w-5 h-5 text-slate-700" />
-      </button>
-      <button
-        onClick={handleReset}
-        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-        title="Réinitialiser"
-      >
-        <RefreshCw className="w-5 h-5 text-slate-700" />
-      </button>
-      <button
-        onClick={handleLocate}
-        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
-        title="Ma position"
-      >
-        <Crosshair className="w-5 h-5 text-blue-500" />
-      </button>
-    </div>
-  );
-}
-
-export default function MapComponent({ 
-  center = [-18.9137, 47.5361], 
-  zoom = 6,
-  userLocation,
-  selectedLocation,
-  searchResults = [],
-  allRegions = {},
-  trafficData = {}
-}) {
-  const [mapReady, setMapReady] = useState(false);
-  const mapRef = useRef(null);
-
-  // Centrer la carte sur le résultat sélectionné
+  // Initialiser la carte
   useEffect(() => {
-    if (selectedLocation && mapRef.current) {
-      const map = mapRef.current;
-      map.setView([selectedLocation.lat, selectedLocation.lng], 12);
-    }
-  }, [selectedLocation]);
+    if (!mapContainer.current || mapInstance.current) return;
 
-  // Afficher les résultats de recherche sur la carte
-  useEffect(() => {
-    if (searchResults.length > 0 && mapRef.current) {
-      const bounds = searchResults.map(r => [r.lat, r.lng]);
-      if (bounds.length > 0) {
-        const map = mapRef.current;
-        const padding = 0.5;
-        const lats = bounds.map(b => b[0]);
-        const lngs = bounds.map(b => b[1]);
-        const minLat = Math.min(...lats) - padding;
-        const maxLat = Math.max(...lats) + padding;
-        const minLng = Math.min(...lngs) - padding;
-        const maxLng = Math.max(...lngs) + padding;
-        map.fitBounds([[minLat, minLng], [maxLat, maxLng]]);
-      }
-    }
-  }, [searchResults]);
+    // Créer la carte
+    mapInstance.current = L.map(mapContainer.current, {
+      center: center || [-18.9137, 47.5361],
+      zoom: zoom || 13,
+      zoomControl: true,
+      attributionControl: false
+    });
 
-  // Centrer sur la position de l'utilisateur
+    // Ajouter le fond de carte OpenStreetMap (gratuit)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(mapInstance.current);
+
+    // Créer des groupes de couches
+    routesLayer.current = L.layerGroup().addTo(mapInstance.current);
+    markersLayer.current = L.layerGroup().addTo(mapInstance.current);
+
+    // Ajouter le contrôle d'échelle
+    L.control.scale({
+      imperial: false,
+      position: 'bottomleft'
+    }).addTo(mapInstance.current);
+
+    return () => {
+      mapInstance.current?.remove();
+    };
+  }, []);
+
+  // Mettre à jour le centre
   useEffect(() => {
-    if (userLocation && mapRef.current) {
-      const map = mapRef.current;
-      map.setView([userLocation.lat, userLocation.lng], 13);
+    if (mapInstance.current && center) {
+      mapInstance.current.setView(center, zoom || 13, {
+        animate: true,
+        duration: 1
+      });
     }
+  }, [center, zoom]);
+
+  // Dessiner les routes de trafic
+  useEffect(() => {
+    if (!mapInstance.current || !routesLayer.current || !trafficData?.length) return;
+
+    // Nettoyer les anciennes routes
+    routesLayer.current.clearLayers();
+
+    // Pour chaque donnée de trafic, trouver et dessiner la route
+    trafficData.forEach(traffic => {
+      const roadData = ROADS_DATA.find(r => r.road === traffic.road);
+      if (!roadData) return;
+
+      const color = TRAFFIC_COLORS[traffic.status] || '#22c55e';
+      const coordinates = roadData.coordinates.map(coord => [coord[0], coord[1]]);
+
+      // Ligne principale
+      const routeLine = L.polyline(coordinates, {
+        color: color,
+        weight: 5,
+        opacity: 0.8,
+        smoothFactor: 1,
+        className: 'traffic-route'
+      });
+
+      // Effet de lueur
+      const glowLine = L.polyline(coordinates, {
+        color: color,
+        weight: 12,
+        opacity: 0.2,
+        smoothFactor: 1
+      });
+
+      // Ajouter les lignes au groupe
+      glowLine.addTo(routesLayer.current);
+      routeLine.addTo(routesLayer.current);
+
+      // Ajouter des marqueurs aux extrémités
+      const startMarker = L.circleMarker(coordinates[0], {
+        radius: 5,
+        fillColor: color,
+        color: '#ffffff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+      });
+
+      const endMarker = L.circleMarker(coordinates[coordinates.length - 1], {
+        radius: 5,
+        fillColor: color,
+        color: '#ffffff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+      });
+
+      startMarker.addTo(routesLayer.current);
+      endMarker.addTo(routesLayer.current);
+
+      // Popup avec infos trafic
+      routeLine.bindPopup(`
+        <div style="font-family: sans-serif; padding: 5px;">
+          <strong style="font-size: 14px;">${traffic.road} - ${traffic.roadName || roadData.name}</strong><br>
+          <span style="font-size: 12px;">${traffic.city}, ${traffic.region}</span><br>
+          <span style="font-size: 13px; font-weight: bold; color: ${color};">
+            ${traffic.status.toUpperCase()} - ${traffic.level}%
+          </span>
+          ${traffic.currentSpeed ? `<br><span style="font-size: 11px;">Vitesse: ${traffic.currentSpeed} km/h</span>` : ''}
+        </div>
+      `);
+    });
+  }, [trafficData]);
+
+  // Afficher la position utilisateur
+  useEffect(() => {
+    if (!mapInstance.current || !markersLayer.current || !userLocation) return;
+
+    markersLayer.current.clearLayers();
+
+    // Marqueur utilisateur
+    const userIcon = L.divIcon({
+      className: 'user-marker',
+      html: `
+        <div style="
+          width: 20px;
+          height: 20px;
+          background: #3b82f6;
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        "></div>
+      `,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+
+    const userMarker = L.marker([userLocation.lat, userLocation.lng], {
+      icon: userIcon
+    }).bindPopup('Vous êtes ici');
+
+    userMarker.addTo(markersLayer.current);
+
+    // Cercle de précision
+    const accuracyCircle = L.circle([userLocation.lat, userLocation.lng], {
+      radius: 100,
+      color: '#3b82f6',
+      fillColor: '#3b82f6',
+      fillOpacity: 0.1,
+      weight: 1
+    });
+
+    accuracyCircle.addTo(markersLayer.current);
   }, [userLocation]);
 
-  // Générer les marqueurs pour toutes les régions
-  const generateRegionMarkers = () => {
-    const markers = [];
-    for (const [region, data] of Object.entries(allRegions)) {
-      markers.push({
-        id: `region-${region}`,
-        name: region,
-        type: 'Region',
-        lat: data.center.lat,
-        lng: data.center.lng,
-        traffic: 'Moyen',
-        isRegion: true,
-        zones: data.zones
-      });
-      
-      data.zones.forEach(zone => {
-        const traffic = trafficData[zone] || 'Fluide';
-        const coords = {
-          lat: data.center.lat + (Math.random() - 0.5) * 0.05,
-          lng: data.center.lng + (Math.random() - 0.5) * 0.05
-        };
-        markers.push({
-          id: `${region}-${zone}`,
-          name: zone,
-          type: 'Zone',
-          region: region,
-          lat: coords.lat,
-          lng: coords.lng,
-          traffic: traffic,
-          isRegion: false
-        });
-      });
-    }
-    return markers;
-  };
+  // Résultats de recherche
+  useEffect(() => {
+    if (!mapInstance.current || !searchResults?.length) return;
 
-  const allMarkers = generateRegionMarkers();
+    searchResults.forEach(result => {
+      const roadData = ROADS_DATA.find(r => r.road === result.road);
+      if (!roadData) return;
+
+      const coords = roadData.coordinates[0];
+      
+      L.popup({
+        className: 'search-popup'
+      })
+        .setLatLng(coords)
+        .setContent(`
+          <div style="padding: 8px; font-family: sans-serif;">
+            <strong>${result.road}</strong><br>
+            <span style="font-size: 12px;">${result.city} - ${result.region}</span><br>
+            <span style="color: ${TRAFFIC_COLORS[result.status]}; font-weight: bold;">
+              ${result.status.toUpperCase()} - ${result.level}%
+            </span>
+          </div>
+        `)
+        .openOn(mapInstance.current);
+    });
+  }, [searchResults]);
 
   return (
-    <div className="w-full h-full relative">
-      <MapContainer
-        center={center}
-        zoom={zoom}
-        className="w-full h-full"
-        zoomControl={false}
-        ref={mapRef}
-        whenReady={() => setMapReady(true)}
-      >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        />
-
-        {/* Marqueur de la position de l'utilisateur (VERT) */}
-        {userLocation && (
-          <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon}>
-            <Popup>
-              <div className="text-center">
-                <p className="font-bold text-green-600">📍 Vous êtes ici</p>
-                <p className="text-xs text-slate-500">
-                  {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
-                </p>
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Tous les marqueurs des zones */}
-        {allMarkers.map((marker) => (
-          <CircleMarker
-            key={marker.id}
-            center={[marker.lat, marker.lng]}
-            radius={marker.isRegion ? 8 : 5}
-            color={marker.isRegion ? '#22c55e' : getTrafficColor(marker.traffic)}
-            fillColor={marker.isRegion ? '#22c55e' : getTrafficColor(marker.traffic)}
-            fillOpacity={marker.isRegion ? 0.5 : 0.7}
-            weight={marker.isRegion ? 3 : 2}
-            eventHandlers={{
-              click: () => {
-                const map = mapRef.current;
-                if (map) map.setView([marker.lat, marker.lng], 12);
-              }
-            }}
-          >
-            <Popup>
-              <div className="text-center max-w-xs">
-                <p className="font-bold text-slate-800 text-lg">{marker.name}</p>
-                <p className="text-sm text-slate-500">{marker.isRegion ? 'Région' : marker.region || 'Zone'}</p>
-                {!marker.isRegion && (
-                  <div className="mt-2 flex items-center justify-center gap-2">
-                    <span 
-                      className="w-3 h-3 rounded-full inline-block"
-                      style={{ backgroundColor: getTrafficColor(marker.traffic) }}
-                    ></span>
-                    <span className="text-sm font-medium">{marker.traffic}</span>
-                  </div>
-                )}
-                {marker.isRegion && marker.zones && (
-                  <div className="mt-2 text-xs text-slate-500">
-                    <p>{marker.zones.length} zones</p>
-                  </div>
-                )}
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
-
-        {/* Résultats de recherche sur la carte */}
-        {searchResults.map((result) => (
-          <CircleMarker
-            key={result.id}
-            center={[result.lat, result.lng]}
-            radius={10}
-            color={getTrafficColor(result.traffic)}
-            fillColor={getTrafficColor(result.traffic)}
-            fillOpacity={0.8}
-            weight={3}
-            eventHandlers={{
-              click: () => {
-                const map = mapRef.current;
-                if (map) map.setView([result.lat, result.lng], 14);
-              }
-            }}
-          >
-            <Popup>
-              <div className="text-center">
-                <p className="font-bold text-slate-800">{result.name}</p>
-                <p className="text-sm text-slate-500">{result.region}</p>
-                <div className="mt-2 flex items-center justify-center gap-2">
-                  <span 
-                    className="w-3 h-3 rounded-full inline-block"
-                    style={{ backgroundColor: getTrafficColor(result.traffic) }}
-                  ></span>
-                  <span className="text-sm font-medium">{result.traffic}</span>
-                </div>
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
-
-        {/* Résultat sélectionné (marqueur rouge spécial) */}
-        {selectedLocation && (
-          <Marker position={[selectedLocation.lat, selectedLocation.lng]} icon={searchIcon}>
-            <Popup>
-              <div className="text-center">
-                <p className="font-bold text-red-600">📍 {selectedLocation.name}</p>
-                <p className="text-sm text-slate-500">{selectedLocation.region}</p>
-                <div className="mt-2 flex items-center justify-center gap-2">
-                  <span 
-                    className="w-3 h-3 rounded-full inline-block"
-                    style={{ backgroundColor: getTrafficColor(selectedLocation.traffic) }}
-                  ></span>
-                  <span className="text-sm font-medium">{selectedLocation.traffic}</span>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Contrôles de la carte */}
-        {mapReady && <MapControls mapRef={mapRef} />}
-      </MapContainer>
-
-      {/* Badge d'information de position */}
-      {userLocation && (
-        <div className="absolute top-4 left-4 z-[1000] bg-black/50 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl text-xs font-medium">
-          📍 {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
-        </div>
-      )}
-    </div>
+    <div 
+      ref={mapContainer} 
+      className="w-full h-full"
+      style={{ backgroundColor: '#1e293b' }}
+    />
   );
 }

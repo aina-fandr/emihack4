@@ -56,35 +56,38 @@ export default function Carte() {
   ];
 
   const mockRegions = [
-    'Analamanga', 'Atsinanana', 'Boeny', 'Vakinankaratra', 
-    'Haute Matsiatra', 'Atsimo-Andrefana', 'Diana', 'Sava', 
+    'Analamanga', 'Atsinanana', 'Boeny', 'Vakinankaratra',
+    'Haute Matsiatra', 'Atsimo-Andrefana', 'Diana', 'Sava',
     'Itasy', 'Bongolava', 'Menabe', 'Atsimo-Atsinanana'
   ];
 
   const mockCities = [
-    'Antananarivo', 'Toamasina', 'Mahajanga', 'Antsirabe', 
+    'Antananarivo', 'Toamasina', 'Mahajanga', 'Antsirabe',
     'Fianarantsoa', 'Toliara', 'Antsiranana', 'Nosy Be',
     'Morondava', 'Manakara', 'Mahanoro', 'Ambatondrazaka'
   ];
 
+  // Dans le useEffect de Carte.jsx
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
+
         const [trafficRes, regionsRes, citiesRes] = await Promise.all([
-          trafficService.getTraffic().catch(() => ({ data: mockTrafficData })),
-          mapService.getRegions().catch(() => ({ data: mockRegions })),
-          mapService.getCities().catch(() => ({ data: mockCities }))
+          trafficService.getTraffic(),
+          mapService.getRegions(),
+          mapService.getCities()
         ]);
 
-        const traffic = trafficRes.data || mockTrafficData;
+        const traffic = trafficRes.data?.data || mockTrafficData;
+        const regionsData = regionsRes.data?.data || mockRegions;
+        const citiesData = citiesRes.data?.data || mockCities;
+
         setTrafficData(traffic);
-        setRegions(regionsRes.data || mockRegions);
-        setCities(citiesRes.data || mockCities);
-        
+        setRegions(regionsData);
+        setCities(citiesData);
         calculateStats(traffic);
-        
+
       } catch (error) {
         console.log('Utilisation des données mockées');
         setTrafficData(mockTrafficData);
@@ -98,17 +101,10 @@ export default function Carte() {
 
     fetchData();
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        () => console.log('Position non disponible')
-      );
-    }
+    // Rafraîchir toutes les 30 secondes
+    const interval = setInterval(fetchData, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const calculateStats = (data) => {
@@ -122,23 +118,23 @@ export default function Carte() {
 
   const getFilteredData = () => {
     let filtered = trafficData;
-    
+
     if (selectedRegion !== 'all') {
       filtered = filtered.filter(d => d.region === selectedRegion);
     }
-    
+
     if (selectedCity) {
       filtered = filtered.filter(d => d.city === selectedCity);
     }
-    
+
     if (searchTerm) {
-      filtered = filtered.filter(d => 
+      filtered = filtered.filter(d =>
         d.road?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.region?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     return filtered;
   };
 
@@ -148,7 +144,7 @@ export default function Carte() {
     e.preventDefault();
     const term = e.target.querySelector('input')?.value || '';
     setSearchTerm(term);
-    
+
     if (term.length > 0) {
       const results = trafficData.filter(d =>
         d.road?.toLowerCase().includes(term.toLowerCase()) ||
@@ -194,14 +190,17 @@ export default function Carte() {
 
   return (
 
-   
+
     <div className="h-full w-full relative bg-slate-900">
-      
+
       {/* Carte */}
       <div className="absolute inset-0 z-0">
-        <MapComponent 
+        <MapComponent
           center={userLocation ? [userLocation.lat, userLocation.lng] : [-18.9137, 47.5361]}
           zoom={13}
+          userLocation={userLocation}
+          trafficData={trafficData}
+          searchResults={searchResults}
         />
       </div>
 
@@ -210,7 +209,7 @@ export default function Carte() {
 
       {/* ============ RECHERCHE + EN DIRECT + STATISTIQUES ============ */}
       <div className="absolute top-20 right-6 z-20 flex flex-col items-end gap-2 max-w-sm">
-        
+
         {/* Barre de recherche */}
         <div className="w-full">
           <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 p-1.5">
@@ -224,7 +223,7 @@ export default function Carte() {
                   defaultValue={searchTerm}
                 />
               </div>
-              
+
               <select
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
@@ -308,7 +307,7 @@ export default function Carte() {
               <MapPin className="w-3 h-3" />
               Axes {filteredData.length}
             </h4>
-            <button 
+            <button
               onClick={() => {
                 setSelectedRegion('all');
                 setSelectedCity('');
@@ -319,11 +318,11 @@ export default function Carte() {
               ✕ Réinitialiser
             </button>
           </div>
-          
+
           <div className="space-y-1.5">
             {filteredData.map((item) => (
-              <div 
-                key={item.id} 
+              <div
+                key={item.id}
                 className={`flex items-center justify-between p-1.5 rounded-xl border ${getStatusColor(item.status)} transition hover:shadow-md`}
               >
                 <div className="flex-1 min-w-0">
@@ -331,12 +330,11 @@ export default function Carte() {
                   <p className="text-[9px] text-slate-500 truncate">{item.city} • {item.region}</p>
                 </div>
                 <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                  <span className={`text-[10px] font-bold ${
-                    item.status === 'fluide' ? 'text-green-500' :
+                  <span className={`text-[10px] font-bold ${item.status === 'fluide' ? 'text-green-500' :
                     item.status === 'modere' ? 'text-yellow-500' :
-                    item.status === 'dense' ? 'text-orange-500' :
-                    'text-red-500'
-                  }`}>
+                      item.status === 'dense' ? 'text-orange-500' :
+                        'text-red-500'
+                    }`}>
                     {item.level}%
                   </span>
                   {getStatusIcon(item.status)}
@@ -354,9 +352,87 @@ export default function Carte() {
       </div>
       <ChatAssistant />
 
-      {/* ============ LÉGENDE ============ */}
+  // Dans Carte.jsx, remplacez la section de la légende par ceci :
+
+      {/* ============ LÉGENDE SUR LA CARTE ============ */}
       <div className="absolute bottom-8 left-6 z-20">
-        <Legend />
+        <div className="bg-black/80 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-slate-700">
+          <h3 className="text-sm font-bold mb-3 text-white">Légende</h3>
+
+          <div className="space-y-2.5">
+            {/* Fluide */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <div className="h-1 w-6 bg-green-500 rounded-full"></div>
+              </div>
+              <span className="text-xs text-green-400 font-medium">Fluide</span>
+            </div>
+
+            {/* Modéré */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                <div className="h-1 w-6 bg-yellow-500 rounded-full"></div>
+              </div>
+              <span className="text-xs text-yellow-400 font-medium">Modéré</span>
+            </div>
+
+            {/* Dense */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                <div className="h-1 w-6 bg-orange-500 rounded-full"></div>
+              </div>
+              <span className="text-xs text-orange-400 font-medium">Dense</span>
+            </div>
+
+            {/* Bloqué */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                <div className="h-1 w-6 bg-red-500 rounded-full"></div>
+              </div>
+              <span className="text-xs text-red-400 font-medium">Bloqué</span>
+            </div>
+          </div>
+
+          {/* Compteur par statut */}
+          <div className="mt-3 pt-3 border-t border-slate-700">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs text-slate-400">{stats.fluide}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-xs text-slate-400">{stats.modere}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span className="text-xs text-slate-400">{stats.dense}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-xs text-slate-400">{stats.bloque}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ville sélectionnée */}
+          {selectedCity && (
+            <div className="mt-2 pt-2 border-t border-slate-700">
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-3 h-3 text-blue-400" />
+                <span className="text-xs text-blue-400 font-medium">{selectedCity}</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ============ PIED DE PAGE ============ */}
