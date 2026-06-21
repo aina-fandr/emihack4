@@ -54,4 +54,8 @@ const User = sequelize.define('User', {
   timestamps: true
 });
 
+User.sync({ alter: true })
+  .then(() => console.log('✅ Table Users synchronisée dans PostgreSQL'))
+  .catch((err) => console.error('❌ Échec de la synchronisation de la table Users :', err.message));
+
 module.exports = User;
