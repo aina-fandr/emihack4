@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Crosshair, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 
 // Configuration des icônes Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -40,14 +41,78 @@ const trafficColors = {
   'Très dense': '#dc2626'
 };
 
-// Couleurs pour les cercles
 const getTrafficColor = (traffic) => {
   return trafficColors[traffic] || '#22c55e';
 };
 
+// Composant de contrôle de la carte
+function MapControls({ mapRef }) {
+  const map = useMap();
+
+  const handleZoomIn = () => {
+    map.zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    map.zoomOut();
+  };
+
+  const handleReset = () => {
+    map.setView([-18.9137, 47.5361], 13);
+  };
+
+  const handleLocate = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          map.setView([position.coords.latitude, position.coords.longitude], 16);
+        },
+        () => {
+          alert('Position non disponible');
+        }
+      );
+    } else {
+      alert('Géolocalisation non supportée');
+    }
+  };
+
+  return (
+    <div className="absolute bottom-8 right-6 z-[1000] flex flex-col gap-2">
+      <button
+        onClick={handleZoomIn}
+        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
+        title="Zoom avant"
+      >
+        <ZoomIn className="w-5 h-5 text-slate-700" />
+      </button>
+      <button
+        onClick={handleZoomOut}
+        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
+        title="Zoom arrière"
+      >
+        <ZoomOut className="w-5 h-5 text-slate-700" />
+      </button>
+      <button
+        onClick={handleReset}
+        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
+        title="Réinitialiser"
+      >
+        <RefreshCw className="w-5 h-5 text-slate-700" />
+      </button>
+      <button
+        onClick={handleLocate}
+        className="bg-white/95 hover:bg-white p-3 rounded-xl shadow-xl border border-slate-200/50 transition hover:scale-105 active:scale-95"
+        title="Ma position"
+      >
+        <Crosshair className="w-5 h-5 text-blue-500" />
+      </button>
+    </div>
+  );
+}
+
 export default function MapComponent({ 
   center = [-18.9137, 47.5361], 
-  zoom = 6, // Zoom plus large pour voir toute l'île
+  zoom = 6,
   userLocation,
   selectedLocation,
   searchResults = [],
@@ -95,7 +160,6 @@ export default function MapComponent({
   const generateRegionMarkers = () => {
     const markers = [];
     for (const [region, data] of Object.entries(allRegions)) {
-      // Marqueur pour la région
       markers.push({
         id: `region-${region}`,
         name: region,
@@ -107,7 +171,6 @@ export default function MapComponent({
         zones: data.zones
       });
       
-      // Marqueurs pour les zones de la région
       data.zones.forEach(zone => {
         const traffic = trafficData[zone] || 'Fluide';
         const coords = {
@@ -137,7 +200,7 @@ export default function MapComponent({
         center={center}
         zoom={zoom}
         className="w-full h-full"
-        zoomControl={true}
+        zoomControl={false}
         ref={mapRef}
         whenReady={() => setMapReady(true)}
       >
@@ -160,7 +223,7 @@ export default function MapComponent({
           </Marker>
         )}
 
-        {/* Tous les marqueurs des zones (VERTS) */}
+        {/* Tous les marqueurs des zones */}
         {allMarkers.map((marker) => (
           <CircleMarker
             key={marker.id}
@@ -251,7 +314,17 @@ export default function MapComponent({
             </Popup>
           </Marker>
         )}
+
+        {/* Contrôles de la carte */}
+        {mapReady && <MapControls mapRef={mapRef} />}
       </MapContainer>
+
+      {/* Badge d'information de position */}
+      {userLocation && (
+        <div className="absolute top-4 left-4 z-[1000] bg-black/50 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl text-xs font-medium">
+          📍 {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
+        </div>
+      )}
     </div>
   );
 }
